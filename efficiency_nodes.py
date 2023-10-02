@@ -759,7 +759,7 @@ class TSC_KSampler:
             # latent_image = latent_tensors
 
             # Unpack script Tuple (X_type, X_value, Y_type, Y_value, grid_spacing, Y_label_orientation, dependencies)
-            X_type, X_value, Y_type, Y_value, grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models, xyplot_as_output_image,\
+            X_type, X_value, Y_type, Y_value, plot_grid_spacing, batch_grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models, xyplot_as_output_image,\
                 xyplot_id, dependencies = script["xyplot"]
 
             #_______________________________________________________________________________________________________
@@ -1963,7 +1963,7 @@ class TSC_KSampler:
 
             # Extract final image dimensions
             latents_per_col, latents_per_row = math.ceil(math.sqrt(batch_size)), math.ceil(batch_size / math.ceil(math.sqrt(batch_size)))
-            col_width, row_height = latent_list[0]['samples'].shape[3] * 8 * latents_per_col, latent_list[0]['samples'].shape[2] * 8 * latents_per_row
+            col_width, row_height = latent_list[0]['samples'].shape[3] * 8 * latents_per_col + (latents_per_col - 1) * batch_grid_spacing, latent_list[0]['samples'].shape[2] * 8 * latents_per_row + (latents_per_row - 1) * batch_grid_spacing
 
             # Print XY Plot Results
             print_plot_variables(X_type, Y_type, X_value, Y_value, add_noise, seed,  steps, start_at_step, end_at_step,
@@ -2003,22 +2003,22 @@ class TSC_KSampler:
 
             # Modify the border size, background width and x_offset initialization based on Y_type and Y_label_orientation
             if Y_type == "Nothing":
-                bg_width = num_cols * col_width + (num_cols - 1) * grid_spacing
+                bg_width = num_cols * col_width + (num_cols - 1) * plot_grid_spacing
                 x_offset_initial = 0
             else:
                 if Y_label_orientation == "Vertical":
-                    bg_width = num_cols * col_width + (num_cols - 1) * grid_spacing + 3 * border_size_left
+                    bg_width = num_cols * col_width + (num_cols - 1) * plot_grid_spacing + 3 * border_size_left
                     x_offset_initial = border_size_left * 3
                 else:  # Assuming Y_label_orientation is "Horizontal"
-                    bg_width = num_cols * col_width + (num_cols - 1) * grid_spacing + border_size_left
+                    bg_width = num_cols * col_width + (num_cols - 1) * plot_grid_spacing + border_size_left
                     x_offset_initial = border_size_left
 
             # Modify the background height based on X_type
             if X_type == "Nothing":
-                bg_height = num_rows * row_height + (num_rows - 1) * grid_spacing
+                bg_height = num_rows * row_height + (num_rows - 1) * plot_grid_spacing
                 y_offset = 0
             else:
-                bg_height = num_rows * row_height + (num_rows - 1) * grid_spacing + 3 * border_size_top
+                bg_height = num_rows * row_height + (num_rows - 1) * plot_grid_spacing + 3 * border_size_top
                 y_offset = border_size_top * 3
 
             # Create the background image
@@ -2035,7 +2035,7 @@ class TSC_KSampler:
 
                     # Paste the images
                     for batch_n in range(batch_size):
-                        background.paste(image_pil_list[batch_begin + batch_n], (x_offset + batch_n % latents_per_col * img_width, y_offset + math.floor(batch_n / latents_per_col) * img_height))
+                        background.paste(image_pil_list[batch_begin + batch_n], (x_offset + batch_n % latents_per_col * (img_width + batch_grid_spacing), y_offset + math.floor(batch_n / latents_per_col) * (img_height + batch_grid_spacing)))
 
                     if row == 0 and X_type != "Nothing":
                         # Assign text
@@ -2117,10 +2117,10 @@ class TSC_KSampler:
                         background.alpha_composite(label_bg, (label_x, label_y))
 
                     # Update the x_offset
-                    x_offset += col_width + grid_spacing
+                    x_offset += col_width + plot_grid_spacing
 
                 # Update the y_offset
-                y_offset += row_height + grid_spacing
+                y_offset += row_height + plot_grid_spacing
 
             xy_plot_image = pil2tensor(background)
 
@@ -2330,11 +2330,12 @@ class TSC_XYplot:
     @classmethod
     def INPUT_TYPES(cls):
         return {"required": {
-                    "grid_spacing": ("INT", {"default": 0, "min": 0, "max": 500, "step": 5}),
-                    "XY_flip": (["False","True"],),
-                    "Y_label_orientation": (["Horizontal", "Vertical"],),
                     "cache_models": (["True", "False"],),
                     "ksampler_output_image": (["Images","Plot"],),
+                    "plot_grid_spacing": ("INT", {"default": 0, "min": 0, "max": 500, "step": 5}),
+                    "batch_grid_spacing": ("INT", {"default": 0, "min": 0, "max": 500, "step": 5}),
+                    "XY_flip": (["False","True"],),
+                    "Y_label_orientation": (["Horizontal", "Vertical"],),
                     "plot_bg_color": ("STRING", {"default": "#353535"}),
                     "plot_label_color": ("STRING", {"default": "#FFFFFF"}),},
                 "optional": {
@@ -2349,7 +2350,7 @@ class TSC_XYplot:
     FUNCTION = "XYplot"
     CATEGORY = "Efficiency Nodes/Scripts"
 
-    def XYplot(self, grid_spacing, XY_flip, Y_label_orientation, cache_models, ksampler_output_image, plot_bg_color, plot_label_color, my_unique_id,
+    def XYplot(self, plot_grid_spacing, batch_grid_spacing, XY_flip, Y_label_orientation, cache_models, ksampler_output_image, plot_bg_color, plot_label_color, my_unique_id,
                dependencies=None, X=None, Y=None):
 
         # Unpack X & Y Tuples if connected
@@ -2432,7 +2433,7 @@ class TSC_XYplot:
         xyplot_as_output_image = ksampler_output_image == "Plot"
 
         # Pack xyplot tuple into its dictionary item under script
-        script = {"xyplot": (X_type, X_value, Y_type, Y_value, grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models,
+        script = {"xyplot": (X_type, X_value, Y_type, Y_value, plot_grid_spacing, batch_grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models,
                         xyplot_as_output_image, my_unique_id, dependencies)}
 
         return (script,)
