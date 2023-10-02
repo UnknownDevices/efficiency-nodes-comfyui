@@ -244,6 +244,9 @@ const nodeWidgetHandlers = {
         'input_mode': handleLoRAStackerInputMode,
         'lora_count': handleLoRAStackerLoraCount
     },
+    "XY Plot": {
+        'ksampler_output_image': handleXYPlotKSamplerOutputImage
+    },
     "XY Input: Steps": {
         'target_parameter': handleXYInputStepsTargetParameter
     },
@@ -322,6 +325,17 @@ function handleLoRAStackerInputMode(node, widget) {
 
 function handleLoRAStackerLoraCount(node, widget) {
     handleVisibility(node, widget.value, "LoRA Stacker");
+}
+
+// XY Plot
+function handleXYPlotKSamplerOutputImage(node, widget) {
+    if (widget.value === 'Plot') {
+        toggleWidget(node, findWidgetByName(node, 'plot_bg_color'), true);
+        toggleWidget(node, findWidgetByName(node, 'plot_label_color'), true);
+    } else {
+        toggleWidget(node, findWidgetByName(node, 'plot_bg_color'));
+        toggleWidget(node, findWidgetByName(node, 'plot_label_color'));
+    }
 }
 
 // XY Input: Steps Handlers

@@ -2,6 +2,7 @@
 # by Luciano Cirino (Discord: TSC#9184) - April 2023 - August 2023
 # https://github.com/LucianoCirino/efficiency-nodes-comfyui
 
+import math
 from torch import Tensor
 from PIL import Image, ImageOps, ImageDraw, ImageFont
 from PIL.PngImagePlugin import PngInfo
@@ -723,6 +724,7 @@ class TSC_KSampler:
         # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         # If the sampler state is "Script" with XY Plot
         elif sampler_state == "Script" and keys_exist_in_script("xyplot"):
+            batch_size = len(latent_image["samples"])
 
             # If no vae connected, throw errors
             if vae == (None,):
@@ -752,22 +754,11 @@ class TSC_KSampler:
             lora_stack = None
             cnet_stack = None
 
-            # Split the 'samples' tensor
-            samples_tensors = torch.split(latent_image['samples'], 1, dim=0)
-
-            # Check if 'noise_mask' exists and split if it does
-            if 'noise_mask' in latent_image:
-                noise_mask_tensors = torch.split(latent_image['noise_mask'], 1, dim=0)
-                latent_tensors = [{'samples': img, 'noise_mask': mask} for img, mask in
-                                  zip(samples_tensors, noise_mask_tensors)]
-            else:
-                latent_tensors = [{'samples': img} for img in samples_tensors]
-
             # Set latent only to the first of the batch
-            latent_image = latent_tensors[0]
+            # latent_image = latent_tensors
 
             # Unpack script Tuple (X_type, X_value, Y_type, Y_value, grid_spacing, Y_label_orientation, dependencies)
-            X_type, X_value, Y_type, Y_value, grid_spacing, Y_label_orientation, cache_models, xyplot_as_output_image,\
+            X_type, X_value, Y_type, Y_value, grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models, xyplot_as_output_image,\
                 xyplot_id, dependencies = script["xyplot"]
 
             #_______________________________________________________________________________________________________
@@ -1432,11 +1423,11 @@ class TSC_KSampler:
                     if xy_capsule is not None:
                         xy_capsule.set_result(image, samples)
 
-                # Add the resulting image tensor to image_tensor_list
-                image_tensor_list.append(image)
-
-                # Convert the image from tensor to PIL Image and add it to the image_pil_list
-                image_pil_list.append(tensor2pil(image))
+                for image in image:
+                    # Add the resulting image tensor to image_tensor_list
+                    image_tensor_list.append(image)
+                    # Convert the image from tensor to PIL Image and add it to the image_pil_list
+                    image_pil_list.append(tensor2pil(image))
 
                 # Return the touched variables
                 return latent_list, image_tensor_list, image_pil_list
@@ -1556,7 +1547,7 @@ class TSC_KSampler:
                                            return_with_leftover_noise, cfg, sampler_name, scheduler[0],
                                            positive, negative, refiner_positive, refiner_negative, latent_image,
                                            denoise, vae, vae_decode, sampler_type, xy_capsule=xy_capsule)
-
+            
             # Clean up cache
             if cache_models == "False":
                 clear_cache_by_exception(xyplot_id, vae_dict=[], ckpt_dict=[], lora_dict=[], refn_dict=[])
@@ -1932,22 +1923,22 @@ class TSC_KSampler:
             # Disable vae decode on next Hold
             update_value_by_id("vae_decode_flag", my_unique_id, False)
 
-            def rearrange_list_A(arr, num_cols, num_rows):
+            def rearrange_list_A(arr, num_cols, num_rows, chunk_size = 1):
                 new_list = []
                 for i in range(num_rows):
                     for j in range(num_cols):
-                        index = j * num_rows + i
-                        new_list.append(arr[index])
+                        index = (j * num_rows + i) * chunk_size
+                        new_list.extend(arr[index:index + chunk_size])
                 return new_list
 
-            def rearrange_list_B(arr, num_rows, num_cols):
+            def rearrange_list_B(arr, num_rows, num_cols, chunk_size):
                 new_list = []
                 for i in range(num_rows):
                     for j in range(num_cols):
-                        index = i * num_cols + j
-                        new_list.append(arr[index])
+                        index = (i * num_cols + j) * chunk_size
+                        new_list.extend(arr[index:index + chunk_size])
                 return new_list
-
+            
             # Extract plot dimensions
             num_rows = max(len(Y_value) if Y_value is not None else 0, 1)
             num_cols = max(len(X_value) if X_value is not None else 0, 1)
@@ -1958,20 +1949,21 @@ class TSC_KSampler:
                 X_value, Y_value = Y_value, X_value
                 X_label, Y_label = Y_label, X_label
                 num_rows, num_cols = num_cols, num_rows
-                image_pil_list = rearrange_list_A(image_pil_list, num_rows, num_cols)
+                image_pil_list = rearrange_list_A(image_pil_list, num_rows, num_cols, batch_size)
             else:
-                image_pil_list = rearrange_list_B(image_pil_list, num_rows, num_cols)
-                image_tensor_list = rearrange_list_A(image_tensor_list, num_cols, num_rows)
-                latent_list = rearrange_list_A(latent_list, num_cols, num_rows)
+                image_pil_list = rearrange_list_B(image_pil_list, num_rows, num_cols, batch_size)
+                image_tensor_list = rearrange_list_A(image_tensor_list, num_rows, num_cols, batch_size)
+                latent_list = rearrange_list_A(latent_list, num_rows, num_cols)
 
             # Extract final image dimensions
-            latent_height, latent_width = latent_list[0]['samples'].shape[2] * 8, latent_list[0]['samples'].shape[3] * 8
+            latents_per_col, latents_per_row = math.ceil(math.sqrt(batch_size)), math.ceil(batch_size / math.ceil(math.sqrt(batch_size)))
+            col_width, row_height = latent_list[0]['samples'].shape[3] * 8 * latents_per_col, latent_list[0]['samples'].shape[2] * 8 * latents_per_row
 
             # Print XY Plot Results
             print_plot_variables(X_type, Y_type, X_value, Y_value, add_noise, seed,  steps, start_at_step, end_at_step,
                                  return_with_leftover_noise, cfg, sampler_name, scheduler, denoise, vae_name, ckpt_name,
                                  clip_skip, refiner_name, refiner_clip_skip, ascore, lora_stack, cnet_stack,
-                                 sampler_type, num_rows, num_cols, latent_height, latent_width)
+                                 sampler_type, num_rows, num_cols, row_height, col_width)
 
             # Concatenate the 'samples' and 'noise_mask' tensors along the first dimension (dim=0)
             keys = latent_list[0].keys()
@@ -1985,7 +1977,7 @@ class TSC_KSampler:
             update_value_by_id("latent", my_unique_id, latent_list)
 
             # Calculate the dimensions of the white background image
-            border_size_top = latent_width // 15
+            border_size_top = col_width // 15
 
             # Longest Y-label length
             if len(Y_label) > 0:
@@ -2000,56 +1992,56 @@ class TSC_KSampler:
                 border_size_left = border_size_top
             else:  # Assuming Y_label_orientation is "Horizontal"
                 # border_size_left is now min(latent_width, latent_height) plus 20% of the difference between the two
-                border_size_left = min(latent_width, latent_height) + int(0.2 * abs(latent_width - latent_height))
+                border_size_left = min(col_width, row_height) + int(0.2 * abs(col_width - row_height))
                 border_size_left = int(border_size_left * Y_label_scale)
 
             # Modify the border size, background width and x_offset initialization based on Y_type and Y_label_orientation
             if Y_type == "Nothing":
-                bg_width = num_cols * latent_width + (num_cols - 1) * grid_spacing
+                bg_width = num_cols * col_width + (num_cols - 1) * grid_spacing
                 x_offset_initial = 0
             else:
                 if Y_label_orientation == "Vertical":
-                    bg_width = num_cols * latent_width + (num_cols - 1) * grid_spacing + 3 * border_size_left
+                    bg_width = num_cols * col_width + (num_cols - 1) * grid_spacing + 3 * border_size_left
                     x_offset_initial = border_size_left * 3
                 else:  # Assuming Y_label_orientation is "Horizontal"
-                    bg_width = num_cols * latent_width + (num_cols - 1) * grid_spacing + border_size_left
+                    bg_width = num_cols * col_width + (num_cols - 1) * grid_spacing + border_size_left
                     x_offset_initial = border_size_left
 
             # Modify the background height based on X_type
             if X_type == "Nothing":
-                bg_height = num_rows * latent_height + (num_rows - 1) * grid_spacing
+                bg_height = num_rows * row_height + (num_rows - 1) * grid_spacing
                 y_offset = 0
             else:
-                bg_height = num_rows * latent_height + (num_rows - 1) * grid_spacing + 3 * border_size_top
+                bg_height = num_rows * row_height + (num_rows - 1) * grid_spacing + 3 * border_size_top
                 y_offset = border_size_top * 3
 
-            # Create the white background image
-            background = Image.new('RGBA', (int(bg_width), int(bg_height)), color=(255, 255, 255, 255))
+            # Create the background image
+            background = Image.new('RGBA', (int(bg_width), int(bg_height)), plot_bg_color)
 
+            img_width, img_height = image_pil_list[0].width, image_pil_list[0].height
             for row in range(num_rows):
-
                 # Initialize the X_offset
                 x_offset = x_offset_initial
 
                 for col in range(num_cols):
                     # Calculate the index for image_pil_list
-                    index = col * num_rows + row
-                    img = image_pil_list[index]
+                    batch_begin = (col * num_rows + row) * batch_size
 
-                    # Paste the image
-                    background.paste(img, (x_offset, y_offset))
+                    # Paste the images
+                    for batch_n in range(batch_size):
+                        background.paste(image_pil_list[batch_begin + batch_n], (x_offset + batch_n % latents_per_col * img_width, y_offset + math.floor(batch_n / latents_per_col) * img_height))
 
                     if row == 0 and X_type != "Nothing":
                         # Assign text
                         text = X_label[col]
 
                         # Add the corresponding X_value as a label above the image
-                        initial_font_size = int(48 * img.width / 512)
-                        font_size = adjusted_font_size(text, initial_font_size, img.width)
+                        initial_font_size = int(48 * col_width / 512)
+                        font_size = adjusted_font_size(text, initial_font_size, col_width)
                         label_height = int(font_size*1.5)
 
                         # Create a white background label image
-                        label_bg = Image.new('RGBA', (img.width, label_height), color=(255, 255, 255, 0))
+                        label_bg = Image.new('RGBA', (col_width, label_height), color=(255, 255, 255, 0))
                         d = ImageDraw.Draw(label_bg)
 
                         # Create the font object
@@ -2057,11 +2049,11 @@ class TSC_KSampler:
 
                         # Calculate the text size and the starting position
                         _, _, text_width, text_height = d.textbbox([0,0], text, font=font)
-                        text_x = (img.width - text_width) // 2
+                        text_x = (col_width - text_width) // 2
                         text_y = (label_height - text_height) // 2
 
                         # Add the text to the label image
-                        d.text((text_x, text_y), text, fill='black', font=font)
+                        d.text((text_x, text_y), text, fill=plot_label_color, font=font)
 
                         # Calculate the available space between the top of the background and the top of the image
                         available_space = y_offset - label_height
@@ -2078,14 +2070,14 @@ class TSC_KSampler:
 
                         # Add the corresponding Y_value as a label to the left of the image
                         if Y_label_orientation == "Vertical":
-                            initial_font_size = int(48 * latent_width / 512)  # Adjusting this to be same as X_label size
-                            font_size = adjusted_font_size(text, initial_font_size, latent_width)
+                            initial_font_size = int(48 * col_width / 512)  # Adjusting this to be same as X_label size
+                            font_size = adjusted_font_size(text, initial_font_size, col_width)
                         else:  # Assuming Y_label_orientation is "Horizontal"
                             initial_font_size = int(48 *  (border_size_left/Y_label_scale) / 512)  # Adjusting this to be same as X_label size
                             font_size = adjusted_font_size(text, initial_font_size,  int(border_size_left/Y_label_scale))
 
                         # Create a white background label image
-                        label_bg = Image.new('RGBA', (img.height, int(font_size*1.2)), color=(255, 255, 255, 0))
+                        label_bg = Image.new('RGBA', (row_height, int(font_size*1.2)), color=(255, 255, 255, 0))
                         d = ImageDraw.Draw(label_bg)
 
                         # Create the font object
@@ -2093,11 +2085,11 @@ class TSC_KSampler:
 
                         # Calculate the text size and the starting position
                         _, _, text_width, text_height = d.textbbox([0,0], text, font=font)
-                        text_x = (img.height - text_width) // 2
+                        text_x = (row_height - text_width) // 2
                         text_y = (font_size - text_height) // 2
 
                         # Add the text to the label image
-                        d.text((text_x, text_y), text, fill='black', font=font)
+                        d.text((text_x, text_y), text, fill=plot_label_color, font=font)
 
                         # Rotate the label_bg 90 degrees counter-clockwise only if Y_label_orientation is "Vertical"
                         if Y_label_orientation == "Vertical":
@@ -2111,18 +2103,18 @@ class TSC_KSampler:
 
                         # Calculate the Y position for the label image based on its orientation
                         if Y_label_orientation == "Vertical":
-                            label_y = y_offset + (img.height - label_bg.height) // 2
+                            label_y = y_offset + (row_height - label_bg.height) // 2
                         else:  # Assuming Y_label_orientation is "Horizontal"
-                            label_y = y_offset + img.height - (img.height - label_bg.height) // 2
+                            label_y = y_offset + row_height - (row_height - label_bg.height) // 2
 
                         # Paste the label image to the left of the image on the background using alpha_composite()
                         background.alpha_composite(label_bg, (label_x, label_y))
 
                     # Update the x_offset
-                    x_offset += img.width + grid_spacing
+                    x_offset += col_width + grid_spacing
 
                 # Update the y_offset
-                y_offset += img.height + grid_spacing
+                y_offset += row_height + grid_spacing
 
             xy_plot_image = pil2tensor(background)
 
@@ -2336,7 +2328,9 @@ class TSC_XYplot:
                     "XY_flip": (["False","True"],),
                     "Y_label_orientation": (["Horizontal", "Vertical"],),
                     "cache_models": (["True", "False"],),
-                    "ksampler_output_image": (["Images","Plot"],),},
+                    "ksampler_output_image": (["Images","Plot"],),
+                    "plot_bg_color": ("STRING", {"default": "#353535"}),
+                    "plot_label_color": ("STRING", {"default": "#FFFFFF"}),},
                 "optional": {
                     "dependencies": ("DEPENDENCIES", ),
                     "X": ("XY", ),
@@ -2349,7 +2343,7 @@ class TSC_XYplot:
     FUNCTION = "XYplot"
     CATEGORY = "Efficiency Nodes/Scripts"
 
-    def XYplot(self, grid_spacing, XY_flip, Y_label_orientation, cache_models, ksampler_output_image, my_unique_id,
+    def XYplot(self, grid_spacing, XY_flip, Y_label_orientation, cache_models, ksampler_output_image, plot_bg_color, plot_label_color, my_unique_id,
                dependencies=None, X=None, Y=None):
 
         # Unpack X & Y Tuples if connected
@@ -2427,7 +2421,7 @@ class TSC_XYplot:
         xyplot_as_output_image = ksampler_output_image == "Plot"
 
         # Pack xyplot tuple into its dictionary item under script
-        script = {"xyplot": (X_type, X_value, Y_type, Y_value, grid_spacing, Y_label_orientation, cache_models,
+        script = {"xyplot": (X_type, X_value, Y_type, Y_value, grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models,
                         xyplot_as_output_image, my_unique_id, dependencies)}
 
         return (script,)
@@ -3305,7 +3299,6 @@ class TSC_XYplot_Control_Net_End:
                 inner_list.extend(cnet_stack)
 
         return ((xy_type, xy_value),)
-
 
 # =======================================================================================================================
 # TSC XY Plot: Control Net
