@@ -334,7 +334,7 @@ function handleXYPlotKSamplerOutputImage(node, widget) {
         toggleWidget(node, findWidgetByName(node, 'plot_label_color'), true);
         toggleWidget(node, findWidgetByName(node, 'XY_flip'), true);
         toggleWidget(node, findWidgetByName(node, 'Y_label_orientation'), true);
-        toggleWidget(node, findWidgetByName(node, 'batch_display'), true);
+        toggleWidget(node, findWidgetByName(node, 'batch_display_mode'), true);
         toggleWidget(node, findWidgetByName(node, 'plot_grid_spacing'), true);
         toggleWidget(node, findWidgetByName(node, 'batch_grid_spacing'), true);
     } else {
@@ -342,7 +342,7 @@ function handleXYPlotKSamplerOutputImage(node, widget) {
         toggleWidget(node, findWidgetByName(node, 'plot_label_color'));
         toggleWidget(node, findWidgetByName(node, 'XY_flip'));
         toggleWidget(node, findWidgetByName(node, 'Y_label_orientation'));
-        toggleWidget(node, findWidgetByName(node, 'batch_display'));
+        toggleWidget(node, findWidgetByName(node, 'batch_display_mode'));
         toggleWidget(node, findWidgetByName(node, 'plot_grid_spacing'));
         toggleWidget(node, findWidgetByName(node, 'batch_grid_spacing'));
     }

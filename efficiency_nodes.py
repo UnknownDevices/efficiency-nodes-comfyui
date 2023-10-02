@@ -758,8 +758,8 @@ class TSC_KSampler:
             # Set latent only to the first of the batch
             # latent_image = latent_tensors
 
-            # Unpack script Tuple (X_type, X_value, Y_type, Y_value, plot_grid_spacing, batch_grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models, xyplot_as_output_image, batch_display, xyplot_id, dependencies )
-            X_type, X_value, Y_type, Y_value, plot_grid_spacing, batch_grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models, xyplot_as_output_image, batch_display,\
+            # Unpack script Tuple (X_type, X_value, Y_type, Y_value, plot_grid_spacing, batch_grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models, xyplot_as_output_image, batch_display_mode, xyplot_id, dependencies )
+            X_type, X_value, Y_type, Y_value, plot_grid_spacing, batch_grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models, xyplot_as_output_image, batch_display_mode,\
                 xyplot_id, dependencies = script["xyplot"]
 
             #_______________________________________________________________________________________________________
@@ -1950,7 +1950,7 @@ class TSC_KSampler:
             num_rows = max(len(Y_value) if Y_value is not None else 0, 1)
 
             # Determine batch grid dimensions
-            match batch_display:
+            match batch_display_mode:
                 case "Single Column":
                     num_latent_cols, num_latent_rows = 1, batch_size
                 case "Single Row":
@@ -2045,7 +2045,7 @@ class TSC_KSampler:
                         img = image_pil_list[batch_begin + batch_n]
 
                         # Calculate the offset for this image
-                        match batch_display:
+                        match batch_display_mode:
                             case "Single Column":
                                 offset = (x_offset, y_offset + batch_n * (img_height + batch_grid_spacing))
                             case "Single Row":
@@ -2354,7 +2354,7 @@ class TSC_XYplot:
                     "plot_label_color": ("STRING", {"default": "#000000"}),
                     "XY_flip": (["False","True"],),
                     "Y_label_orientation": (["Horizontal", "Vertical"],),
-                    "batch_display": (["Table","Single Column","Single Row"],),
+                    "batch_display_mode": (["Table","Single Column","Single Row"],),
                     "plot_grid_spacing": ("INT", {"default": 0, "min": 0, "max": 500, "step": 5}),
                     "batch_grid_spacing": ("INT", {"default": 0, "min": 0, "max": 500, "step": 5}),},
                 "optional": {
@@ -2369,7 +2369,7 @@ class TSC_XYplot:
     FUNCTION = "XYplot"
     CATEGORY = "Efficiency Nodes/Scripts"
 
-    def XYplot(self, cache_models, ksampler_output_image, plot_bg_color, plot_label_color, XY_flip, Y_label_orientation, batch_display, plot_grid_spacing, batch_grid_spacing, my_unique_id,
+    def XYplot(self, cache_models, ksampler_output_image, plot_bg_color, plot_label_color, XY_flip, Y_label_orientation, batch_display_mode, plot_grid_spacing, batch_grid_spacing, my_unique_id,
                dependencies=None, X=None, Y=None):
 
         # Unpack X & Y Tuples if connected
@@ -2453,7 +2453,7 @@ class TSC_XYplot:
 
         # Pack xyplot tuple into its dictionary item under script
         script = {"xyplot": (X_type, X_value, Y_type, Y_value, plot_grid_spacing, batch_grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models,
-                        xyplot_as_output_image, batch_display, my_unique_id, dependencies)}
+                        xyplot_as_output_image, batch_display_mode, my_unique_id, dependencies)}
 
         return (script,)
 
