@@ -330,19 +330,21 @@ function handleLoRAStackerLoraCount(node, widget) {
 // XY Plot
 function handleXYPlotKSamplerOutputImage(node, widget) {
     if (widget.value === 'Plot') {
-        toggleWidget(node, findWidgetByName(node, 'plot_grid_spacing'), true);
-        toggleWidget(node, findWidgetByName(node, 'batch_grid_spacing'), true);
-        toggleWidget(node, findWidgetByName(node, 'XY_flip'), true);
-        toggleWidget(node, findWidgetByName(node, 'Y_label_orientation'), true);
         toggleWidget(node, findWidgetByName(node, 'plot_bg_color'), true);
         toggleWidget(node, findWidgetByName(node, 'plot_label_color'), true);
+        toggleWidget(node, findWidgetByName(node, 'XY_flip'), true);
+        toggleWidget(node, findWidgetByName(node, 'Y_label_orientation'), true);
+        toggleWidget(node, findWidgetByName(node, 'batch_display'), true);
+        toggleWidget(node, findWidgetByName(node, 'plot_grid_spacing'), true);
+        toggleWidget(node, findWidgetByName(node, 'batch_grid_spacing'), true);
     } else {
-        toggleWidget(node, findWidgetByName(node, 'plot_grid_spacing'));
-        toggleWidget(node, findWidgetByName(node, 'batch_grid_spacing'));
-        toggleWidget(node, findWidgetByName(node, 'XY_flip'));
-        toggleWidget(node, findWidgetByName(node, 'Y_label_orientation'));
         toggleWidget(node, findWidgetByName(node, 'plot_bg_color'));
         toggleWidget(node, findWidgetByName(node, 'plot_label_color'));
+        toggleWidget(node, findWidgetByName(node, 'XY_flip'));
+        toggleWidget(node, findWidgetByName(node, 'Y_label_orientation'));
+        toggleWidget(node, findWidgetByName(node, 'batch_display'));
+        toggleWidget(node, findWidgetByName(node, 'plot_grid_spacing'));
+        toggleWidget(node, findWidgetByName(node, 'batch_grid_spacing'));
     }
 }
 
