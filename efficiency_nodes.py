@@ -1571,7 +1571,7 @@ class TSC_KSampler:
             def print_plot_variables(X_type, Y_type, X_value, Y_value, add_noise, seed, steps, start_at_step, end_at_step,
                                      return_with_leftover_noise, cfg, sampler_name, scheduler, denoise, vae_name, ckpt_name,
                                      clip_skip, refiner_name, refiner_clip_skip, ascore, lora_stack, cnet_stack, sampler_type,
-                                     num_rows, num_cols, latent_height, latent_width):
+                                     num_rows, num_cols, latent_height, latent_width, batch_size):
 
                 print("-" * 40)  # Print an empty line followed by a separator line
                 print(f"{xyplot_message('XY Plot Results:')}")
@@ -1810,7 +1810,9 @@ class TSC_KSampler:
                 #..........................................PRINTOUTS....................................................
                 print(f"(X) {X_type}")
                 print(f"(Y) {Y_type}")
-                print(f"img_count: {len(X_value)*len(Y_value)}")
+                print(f"batches_count: {len(X_value)*len(Y_value)}")
+                print(f"batch_size: {batch_size}")
+                print(f"img_count: {len(X_value)*len(Y_value)*batch_size}")
                 print(f"img_dims: {latent_height} x {latent_width}")
                 print(f"plot_dim: {num_cols} x {num_rows}")
                 print(f"ckpt: {ckpt_name if ckpt_name is not None else ''}")
@@ -1912,13 +1914,13 @@ class TSC_KSampler:
                     print(f"cnet_end%: {', '.join(cnet_end_pct) if isinstance(cnet_end_pct, list) else cnet_end_pct}")
 
             # ______________________________________________________________________________________________________
-            def adjusted_font_size(text, initial_font_size, latent_width):
+            def adjusted_font_size(text, initial_font_size, col_width):
                 font = ImageFont.truetype(str(Path(font_path)), initial_font_size)
                 text_width = font.getlength(text)
 
-                if text_width > (latent_width * 0.9):
+                if text_width > (col_width * 0.9):
                     scaling_factor = 0.9  # A value less than 1 to shrink the font size more aggressively
-                    new_font_size = int(initial_font_size * (latent_width / text_width) * scaling_factor)
+                    new_font_size = int(initial_font_size * (col_width / text_width) * scaling_factor)
                 else:
                     new_font_size = initial_font_size
 
@@ -1973,11 +1975,14 @@ class TSC_KSampler:
             # Extract final image dimensions
             col_width, row_height = latent_list[0]['samples'].shape[3] * 8 * num_latent_cols + (num_latent_cols - 1) * batch_grid_spacing, latent_list[0]['samples'].shape[2] * 8 * num_latent_rows + (num_latent_rows - 1) * batch_grid_spacing
 
+            # Get individual image dimensions
+            img_width, img_height = image_pil_list[0].width, image_pil_list[0].height
+
             # Print XY Plot Results
             print_plot_variables(X_type, Y_type, X_value, Y_value, add_noise, seed,  steps, start_at_step, end_at_step,
                                  return_with_leftover_noise, cfg, sampler_name, scheduler, denoise, vae_name, ckpt_name,
                                  clip_skip, refiner_name, refiner_clip_skip, ascore, lora_stack, cnet_stack,
-                                 sampler_type, num_rows, num_cols, row_height, col_width)
+                                 sampler_type, num_rows, num_cols, img_height, img_width, batch_size)
 
             # Concatenate the 'samples' and 'noise_mask' tensors along the first dimension (dim=0)
             keys = latent_list[0].keys()
@@ -2005,7 +2010,7 @@ class TSC_KSampler:
             if Y_label_orientation == "Vertical":
                 border_size_left = border_size_top
             else:  # Assuming Y_label_orientation is "Horizontal"
-                # border_size_left is now min(latent_width, latent_height) plus 20% of the difference between the two
+                # border_size_left is now min(col_width, row_height) plus 20% of the difference between the two
                 border_size_left = min(col_width, row_height) + int(0.2 * abs(col_width - row_height))
                 border_size_left = int(border_size_left * Y_label_scale)
 
@@ -2032,7 +2037,6 @@ class TSC_KSampler:
             # Create the background image
             background = Image.new('RGBA', (int(bg_width), int(bg_height)), plot_bg_color)
 
-            img_width, img_height = image_pil_list[0].width, image_pil_list[0].height
             for row in range(num_rows):
                 # Initialize the X_offset
                 x_offset = x_offset_initial
