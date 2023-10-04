@@ -755,9 +755,6 @@ class TSC_KSampler:
             lora_stack = None
             cnet_stack = None
 
-            # Set latent only to the first of the batch
-            # latent_image = latent_tensors
-
             # Unpack script Tuple (X_type, X_value, Y_type, Y_value, plot_grid_spacing, batch_grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models, xyplot_as_output_image, batch_display_mode, xyplot_id, dependencies )
             X_type, X_value, Y_type, Y_value, plot_grid_spacing, batch_grid_spacing, plot_bg_color, plot_label_color, Y_label_orientation, cache_models, xyplot_as_output_image, batch_display_mode,\
                 xyplot_id, dependencies = script["xyplot"]
