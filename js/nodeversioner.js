@@ -3,70 +3,71 @@ import { app } from "../../scripts/app.js";
 // Latest versions by node. Only nodes that have undergone breaking changes at some point get versioned
 const nodeLatestVersions = {
     "XY Plot": 1,
-}
-
-// Update handlers by version by node. Each handler updates a node from the previous version to the said version
-const nodeUpdaterHandlers = {
-	"XY Plot": {
-        1: updateXYPlotToV1,
-    }
 };
 
-/* 
-    Update handlers do two things:
-    - On previously existing widgets that were repositioned, assign the widget value found in the outdated position to the new position
-    - On non previously exiting widgets, assign the default widget value for that widget
-*/
+// Update handlers by version by node. Each handler updates a node with data from the previous version to the said version
+const nodeUpdaterHandlers = {
+    "XY Plot": {
+        1: updateXYPlotToV1,
+    },
+};
+
+// Update handlers do two things:
+// - On previously existing widgets that were repositioned, assign the widget value found in the outdated position to the new position
+// - On non previously exiting widgets, assign the default widget value for that widget
 
 // XY Plot Handlers
-function updateXYPlotToV1(node) {
-    node.widgets[0].value = node.widgets_values[3];
-    node.widgets[1].value = node.widgets_values[4];
-    node.widgets[2].value = "#FFFFFF";
-    node.widgets[3].value = "#000000";
-    node.widgets[4].value = node.widgets_values[1];
-    node.widgets[5].value = node.widgets_values[2];
-    node.widgets[6].value = "Table";
-    node.widgets[7].value = node.widgets_values[0];
-    node.widgets[8].value = 0;
+function updateXYPlotToV1(nodeData) {
+    const updatedValues = [
+        nodeData.widgets_values[3],
+        nodeData.widgets_values[4],
+        "#FFFFFF",
+        "#000000",
+        nodeData.widgets_values[1],
+        nodeData.widgets_values[2],
+        "Table",
+        nodeData.widgets_values[0],
+        0,
+    ];
+    nodeData.widgets_values = updatedValues;
 }
 
-// Update any nodes not at their latest version
-function nodeUpdaterLogic(node) {
+// Update data of nodes not at their latest version
+function nodeUpdaterLogic(nodeData) {
     // Get updater handlers and latest version for this node
-    const title = node.getTitle();
-    const handlers = nodeUpdaterHandlers[title];
-    const latestVersion = nodeLatestVersions[title];
+    const handlers = nodeUpdaterHandlers[nodeData.type];
+    const latestVersion = nodeLatestVersions[nodeData.type];
     if (!handlers || !latestVersion) return;
     
-    // Create version property if it doesn't exist
-    if (node.properties?.["Version"] == null) {
-		node.addProperty("Version", 0, "number");
-	}
-
     // Call the handler to update the node to the next version until we've updated to the latest version
-    for (let i = node.properties["Version"] + 1; i <= latestVersion; i++) {
-        handlers[i]?.(node);
+    for (let i = (nodeData.properties?.["Version"] ?? 0) + 1; i <= latestVersion; i++) {
+        handlers[i]?.(nodeData);
     }
-
-    // Set node version to latest updated version
-	node.properties["Version"] = version;
 }
 
-// Add a version property to newly created nodes
+// Set the version of newly created nodes to their latest
 function nodeVersionerLogic(node) {
-    const latestVersion = nodeLatestVersions[node.getTitle()]
+    const latestVersion = nodeLatestVersions[node.getTitle()];
     if (latestVersion) {
-        node.addProperty("Version", latestVersion, "number")
+        node.addProperty("Version", latestVersion, "number");
     }
 }
 
 app.registerExtension({
-	name: "efficiency.nodeversioner",
-	loadedGraphNode(node) {
-        nodeUpdaterLogic(node);
-	},
+    name: "efficiency.nodeversioner",
+    init(app) {
+        // Intercept the loading of a graph for fixing the data of nodes from outdated workflows before any node is created
+        const loadGraphData = app.loadGraphData;
+        app.loadGraphData = function (graphData) {
+            // Normally, if a graph data isn't provided the default graph is loaded, but since the default graph doesn't contain any of our nodes, we're not interested
+            for (let nodeData of graphData?.nodes) {
+                nodeUpdaterLogic(nodeData);
+            }
+
+            return loadGraphData?.apply(this, arguments);
+        };
+    },
     nodeCreated(node) {
-        nodeVersionerLogic(node)
+        nodeVersionerLogic(node);
     },
 });
